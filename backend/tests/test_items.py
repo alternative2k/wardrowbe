@@ -1,11 +1,20 @@
+from io import BytesIO
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
+from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.item import ClothingItem, ItemStatus
 from app.services.item_service import ItemService
+
+
+def _make_test_image_bytes() -> bytes:
+    buf = BytesIO()
+    Image.new("RGB", (50, 50), (100, 150, 200)).save(buf, format="JPEG")
+    return buf.getvalue()
 
 
 class TestItemList:
@@ -324,3 +333,44 @@ class TestItemService:
         # Black should be most common
         assert color_dist[0]["color"] == "black"
         assert color_dist[0]["count"] == 3
+
+
+class TestBulkCreateSkipAI:
+    @pytest.mark.asyncio
+    async def test_skip_ai_marks_items_ready_without_queueing(
+        self, client: AsyncClient, auth_headers
+    ):
+        files = [("images", ("shirt.jpg", _make_test_image_bytes(), "image/jpeg"))]
+        with patch("app.api.items.create_pool", new_callable=AsyncMock) as mock_create_pool:
+            mock_redis = AsyncMock()
+            mock_create_pool.return_value = mock_redis
+            response = await client.post(
+                "/api/v1/items/bulk",
+                files=files,
+                data={"skip_ai": "true"},
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["successful"] == 1, data["results"][0].get("error")
+        assert data["results"][0]["item"]["status"] == "ready"
+        mock_redis.enqueue_job.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_default_queues_ai_tagging(self, client: AsyncClient, auth_headers):
+        files = [("images", ("shirt.jpg", _make_test_image_bytes(), "image/jpeg"))]
+        with patch("app.api.items.create_pool", new_callable=AsyncMock) as mock_create_pool:
+            mock_redis = AsyncMock()
+            mock_create_pool.return_value = mock_redis
+            response = await client.post(
+                "/api/v1/items/bulk",
+                files=files,
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["successful"] == 1
+        assert data["results"][0]["item"]["status"] == "processing"
+        mock_redis.enqueue_job.assert_called_once()

@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
@@ -61,6 +62,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
   // Bulk upload state
   const [bulkFiles, setBulkFiles] = useState<FileWithPreview[]>([]);
   const [bulkResult, setBulkResult] = useState<BulkUploadResponse | null>(null);
+  const [skipAi, setSkipAi] = useState(false);
   const [activeTab, setActiveTab] = useState('single');
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
@@ -148,7 +150,10 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
     if (bulkFiles.length === 0) return;
 
     try {
-      const result = await bulkCreateItems.mutateAsync(bulkFiles.map((f) => f.file));
+      const result = await bulkCreateItems.mutateAsync({
+        files: bulkFiles.map((f) => f.file),
+        skipAi,
+      });
       setBulkResult(result);
 
       // Show toast based on results
@@ -194,6 +199,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
     });
     setBulkFiles([]);
     setBulkResult(null);
+    setSkipAi(false);
     setActiveTab('single');
     setShowCloseConfirm(false);
 
@@ -223,6 +229,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
     });
     setBulkFiles([]);
     setBulkResult(null);
+    setSkipAi(false);
   };
 
   return (
@@ -441,9 +448,21 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
                       </div>
                     </ScrollArea>
 
-                    <p className="text-xs text-muted-foreground">
-                      All items will be auto-tagged by AI. You can edit details later.
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="skip-ai"
+                        checked={skipAi}
+                        onCheckedChange={(checked) => setSkipAi(checked === true)}
+                      />
+                      <Label htmlFor="skip-ai" className="text-xs font-normal text-muted-foreground">
+                        Skip AI analysis (add with placeholder values, edit details later)
+                      </Label>
+                    </div>
+                    {!skipAi && (
+                      <p className="text-xs text-muted-foreground">
+                        All items will be auto-tagged by AI. You can edit details later.
+                      </p>
+                    )}
                   </div>
                 )}
 

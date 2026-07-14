@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
+from app.models.item import ItemStatus
 from app.models.user import User
 from app.schemas.item import (
     ArchiveRequest,
@@ -194,6 +195,7 @@ async def bulk_create_items(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
     images: list[UploadFile] = File(..., description="Multiple image files to upload"),
+    skip_ai: bool = Form(False),
 ) -> BulkUploadResponse:
     if len(images) > settings.max_bulk_upload_count:
         raise HTTPException(
@@ -275,8 +277,11 @@ async def bulk_create_items(
                     image_paths=image_paths,
                 )
 
-                # Queue AI tagging job
-                if redis:
+                if skip_ai:
+                    item.status = ItemStatus.ready
+                    await db.flush()
+                    await db.refresh(item, attribute_names=["updated_at"])
+                elif redis:
                     try:
                         full_image_path = f"{settings.storage_path}/{image_paths['image_path']}"
                         await redis.enqueue_job(
@@ -390,8 +395,6 @@ async def bulk_analyze_items(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> BulkAnalyzeResponse:
-    from app.models.item import ItemStatus
-
     item_service = ItemService(db)
     queued = 0
     failed = 0
@@ -794,8 +797,6 @@ async def trigger_ai_analysis(
 
     try:
         # Set item status to processing so UI shows feedback
-        from app.models.item import ItemStatus
-
         item.status = ItemStatus.processing
         await db.commit()
 

@@ -624,6 +624,7 @@ export function useBulkReanalyzeItems() {
 
 function uploadBulkItemsChunk(
   files: File[],
+  skipAi: boolean,
   token: string | null | undefined,
   onProgress: (percent: number) => void
 ): Promise<BulkUploadResponse> {
@@ -631,6 +632,7 @@ function uploadBulkItemsChunk(
   files.forEach((file) => {
     formData.append('images', file);
   });
+  formData.append('skip_ai', String(skipAi));
 
   return new Promise<BulkUploadResponse>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -717,7 +719,7 @@ export function useBulkCreateItems() {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const mutation = useMutation({
-    mutationFn: async (files: File[]) => {
+    mutationFn: async ({ files, skipAi = false }: { files: File[]; skipAi?: boolean }) => {
       const token = session?.accessToken || getAccessToken();
       const chunks = chunkArray(files, BULK_UPLOAD_CHUNK_SIZE);
       const responses: BulkUploadResponse[] = [];
@@ -725,7 +727,7 @@ export function useBulkCreateItems() {
       for (let i = 0; i < chunks.length; i++) {
         const chunkFiles = chunks[i];
         try {
-          const response = await uploadBulkItemsChunk(chunkFiles, token, (chunkPercent) => {
+          const response = await uploadBulkItemsChunk(chunkFiles, skipAi, token, (chunkPercent) => {
             const overall = ((i + chunkPercent / 100) / chunks.length) * 100;
             setUploadProgress(Math.round(overall));
           });
