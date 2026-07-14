@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cn } from '@/lib/utils'
+import { cn, chunkArray } from '@/lib/utils'
 
 describe('cn utility', () => {
   it('should merge class names', () => {
@@ -41,5 +41,38 @@ describe('cn utility', () => {
       'visible': true,
     })
     expect(result).toBe('active visible')
+  })
+})
+
+describe('chunkArray utility', () => {
+  it('should split items evenly across chunks', () => {
+    const result = chunkArray([1, 2, 3, 4], 2)
+    expect(result).toEqual([[1, 2], [3, 4]])
+  })
+
+  it('should put remainder items in a final smaller chunk', () => {
+    const result = chunkArray([1, 2, 3, 4, 5], 2)
+    expect(result).toEqual([[1, 2], [3, 4], [5]])
+  })
+
+  it('should return a single chunk when items fit within size', () => {
+    const result = chunkArray([1, 2, 3], 20)
+    expect(result).toEqual([[1, 2, 3]])
+  })
+
+  it('should return an empty array for empty input', () => {
+    const result = chunkArray([], 20)
+    expect(result).toEqual([])
+  })
+
+  it('should not lose or duplicate items across many chunks', () => {
+    const items = Array.from({ length: 45 }, (_, i) => i)
+    const result = chunkArray(items, 20)
+    expect(result).toEqual([
+      items.slice(0, 20),
+      items.slice(20, 40),
+      items.slice(40, 45),
+    ])
+    expect(result.flat()).toEqual(items)
   })
 })

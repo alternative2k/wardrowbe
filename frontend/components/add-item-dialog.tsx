@@ -102,11 +102,7 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
         id: `${file.name}-${Date.now()}-${Math.random()}`,
       };
     });
-    setBulkFiles((prev) => {
-      const combined = [...prev, ...newFiles];
-      // Limit to 20 files
-      return combined
-    });
+    setBulkFiles((prev) => [...prev, ...newFiles]);
   }, []);
 
   const { getRootProps: getSingleRootProps, getInputProps: getSingleInputProps, isDragActive: isSingleDragActive } = useDropzone({
@@ -123,7 +119,6 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
     accept: {
       'image/*': ['.jpeg', '.jpg', '.png', '.webp', '.heic', '.heif'],
     },
-    // maxFiles: 20,
     multiple: true,
   });
 
@@ -401,9 +396,6 @@ export function AddItemDialog({ open, onOpenChange }: AddItemDialogProps) {
                       ? 'Drop the images here...'
                       : 'Drag & drop multiple images, or tap to select'}
                   </p>
-                  {/* <p className="mt-1 text-xs text-muted-foreground">
-                    Up to 20 images (JPEG, PNG, WebP, HEIC)
-                  </p> */}
                 </div>
 
                 {bulkFiles.length > 0 && (
