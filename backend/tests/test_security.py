@@ -85,6 +85,26 @@ class TestBulkUploadLimit:
         assert response.status_code == 400
         assert "Maximum 20" in response.json()["detail"]
 
+    @pytest.mark.asyncio
+    async def test_limit_is_configurable(self, client, auth_headers):
+        from app.api import items as items_api
+
+        original = items_api.settings.max_bulk_upload_count
+        items_api.settings.max_bulk_upload_count = 5
+        try:
+            files = [
+                ("images", (f"img{i}.jpg", b"\xff\xd8\xff\xe0", "image/jpeg")) for i in range(6)
+            ]
+            response = await client.post(
+                "/api/v1/items/bulk",
+                files=files,
+                headers=auth_headers,
+            )
+            assert response.status_code == 400
+            assert "Maximum 5" in response.json()["detail"]
+        finally:
+            items_api.settings.max_bulk_upload_count = original
+
 
 class TestNtfyServerValidation:
     def test_rejects_non_http(self):

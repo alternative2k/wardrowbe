@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     # Storage
     storage_path: str = Field(default="/data/wardrobe")
     max_upload_size_mb: int = Field(default=10)
+    max_bulk_upload_count: int = Field(default=20)
 
     # Background removal
     bg_removal_provider: str = Field(default="rembg")  # "rembg" or "http"
