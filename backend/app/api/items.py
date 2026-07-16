@@ -378,12 +378,12 @@ async def bulk_delete_items(
                 failed += 1
                 continue
 
-            # Delete images
             image_service.delete_images(
                 {
                     "image_path": item.image_path,
                     "medium_path": item.medium_path,
                     "thumbnail_path": item.thumbnail_path,
+                    "original_backup_path": item.original_image_path,
                 }
             )
 
@@ -550,13 +550,13 @@ async def delete_item(
             detail="Item not found",
         )
 
-    # Delete images
     image_service = ImageService()
     image_service.delete_images(
         {
             "image_path": item.image_path,
             "medium_path": item.medium_path,
             "thumbnail_path": item.thumbnail_path,
+            "original_backup_path": item.original_image_path,
         }
     )
 
@@ -950,9 +950,10 @@ async def remove_item_background(
 
     try:
         image_service = ImageService()
-        await asyncio.to_thread(image_service.remove_background, item.image_path, bg_color)
+        result = await asyncio.to_thread(image_service.remove_background, item.image_path, bg_color)
+        item.original_image_path = result["original_backup_path"]
         await db.commit()
-        await db.refresh(item)
+        await db.refresh(item, attribute_names=["original_image_path", "updated_at"])
         return ItemResponse.model_validate(item)
     except ImportError:
         raise HTTPException(
@@ -972,6 +973,120 @@ async def remove_item_background(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to remove background",
         ) from None
+
+
+@router.post("/{item_id}/restore-original", response_model=ItemResponse)
+async def restore_item_original(
+    item_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> ItemResponse:
+    item_service = ItemService(db)
+    item = await item_service.get_by_id(item_id, current_user.id)
+
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found",
+        )
+
+    if not item.original_image_path:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No original image to restore",
+        )
+
+    try:
+        image_service = ImageService()
+        await asyncio.to_thread(
+            image_service.restore_original, item.image_path, item.original_image_path
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from None
+    except Exception as e:
+        logger.error(f"Failed to restore original image: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to restore original image",
+        ) from None
+
+    item.original_image_path = None
+    await db.commit()
+    await db.refresh(item, attribute_names=["original_image_path", "updated_at"])
+    return ItemResponse.model_validate(item)
+
+
+@router.put("/{item_id}/image", response_model=ItemResponse)
+async def replace_item_image(
+    item_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    image: UploadFile = File(...),
+) -> ItemResponse:
+    item_service = ItemService(db)
+    item = await item_service.get_by_id(item_id, current_user.id)
+
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item not found",
+        )
+
+    image_service = ImageService()
+    content = await image.read()
+    content_type = image.content_type or "application/octet-stream"
+
+    if not image_service.validate_image(content, content_type):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid image file. Supported formats: JPEG, PNG, WebP, HEIC",
+        )
+
+    try:
+        image_paths = await image_service.process_and_store(
+            user_id=current_user.id,
+            image_data=content,
+            original_filename=image.filename or "upload.jpg",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from None
+
+    old_paths = {
+        "image_path": item.image_path,
+        "medium_path": item.medium_path,
+        "thumbnail_path": item.thumbnail_path,
+        "original_backup_path": item.original_image_path,
+    }
+
+    item.image_path = image_paths["image_path"]
+    item.medium_path = image_paths["medium_path"]
+    item.thumbnail_path = image_paths["thumbnail_path"]
+    item.image_hash = image_paths["image_hash"]
+    item.original_image_path = None
+    await db.commit()
+    await db.refresh(
+        item,
+        attribute_names=[
+            "image_path",
+            "medium_path",
+            "thumbnail_path",
+            "image_hash",
+            "original_image_path",
+            "updated_at",
+        ],
+    )
+
+    # Old files are removed only after the new paths are committed, so a failed
+    # commit cannot leave the item pointing at deleted files
+    image_service.delete_images(old_paths)
+
+    return ItemResponse.model_validate(item)
 
 
 @router.post(

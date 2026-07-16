@@ -45,6 +45,7 @@ class ClothingItem(Base):
     image_path: Mapped[str] = mapped_column(String(500), nullable=False)
     thumbnail_path: Mapped[str | None] = mapped_column(String(500))
     medium_path: Mapped[str | None] = mapped_column(String(500))
+    original_image_path: Mapped[str | None] = mapped_column(String(500))
     image_hash: Mapped[str | None] = mapped_column(String(16), index=True)  # pHash hex string
 
     # Classification
