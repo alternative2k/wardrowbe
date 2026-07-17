@@ -37,8 +37,8 @@ services:
 
   backend:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: wardrobe_backend
     restart: unless-stopped
     extra_hosts:
@@ -84,8 +84,8 @@ services:
 
   worker:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: wardrobe_worker
     restart: unless-stopped
     command: arq app.workers.worker.WorkerSettings
@@ -120,8 +120,8 @@ services:
 
   frontend:
     build:
-      context: .
-      dockerfile: frontend/Dockerfile
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: wardrobe_frontend
     restart: unless-stopped
     extra_hosts:
