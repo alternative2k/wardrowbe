@@ -20,7 +20,9 @@ if [ "$(id -u)" = "0" ]; then
         fi
     done
 
+    gosu appuser alembic upgrade head
     exec gosu appuser "$@"
 fi
 
+alembic upgrade head
 exec "$@"
